@@ -11,11 +11,12 @@ SCREEN_WIDTH, SCREEN_HEIGHT = 450, 692
 
 PLAYER_WIDTH = 50
 PLAYER_HEIGHT = 50
-JUMP_HEIGHT = 17
+JUMP_HEIGHT = 18
 GRAVITY = 1
 
 PLATFORM_WIDTH = 100
 PLATFORM_HEIGHT = 10
+PLATFORMS_DIST = sum(range(JUMP_HEIGHT)) - PLATFORM_HEIGHT - 10
 
 
 class Player:
@@ -24,10 +25,11 @@ class Player:
         self.image.fill((255, 0, 0))
         self.rect = self.image.get_rect(topleft=(x, y))
         self.is_jumping = False
+        self.is_falling = False
         self.jump_count = JUMP_HEIGHT
         self.score = 0
         self.max_height = 0
-        self.image = pygame.image.load('character.png').convert_alpha()
+        #self.image = pygame.image.load('character.png').convert_alpha()
 
     def update_score(self):
         self.score = self.max_height
@@ -36,10 +38,12 @@ class Player:
         self.rect.x += dx
         self.rect.y += dy
 
-    def jump(self):
+    def jump(self, jh = JUMP_HEIGHT):
+
+        #else:
         if not self.is_jumping:
             self.is_jumping = True
-            self.jump_count = JUMP_HEIGHT
+            self.jump_count = jh
 
     def draw(self, screen):
         pygame.draw.rect(screen, BLACK, self.rect)
@@ -81,7 +85,6 @@ class CrashingPlatform(Platform):
         self.crashed = True
 
     def move(self):
-        print(1)
         if self.crashed and not self.crash_animation_complete:
             self.rect.y += self.ySpeed
             if self.rect.y >= SCREEN_HEIGHT:
@@ -95,39 +98,117 @@ class CrashingPlatform(Platform):
 
 
 class Platforms:
-    def __init__(self, image):
-        self.platforms = []
+    def __init__(self, norm_image, crash_image_1, crash_image_2):
+        self.normal_platforms = []
         self.last_y = SCREEN_HEIGHT
         while self.last_y >= -SCREEN_HEIGHT:
-            platform = Platform(image)
-            self.place_platform(platform)
-            self.platforms.append(platform)
+            platform = Platform(norm_image)
+            self.place_normal_platform(platform)
+            self.normal_platforms.append(platform)
 
-    def __call__(self):
-        return self.platforms
+        self.crashing_platforms = []
+        for i in range( 7 ):
+            platform = CrashingPlatform(crash_image_1, crash_image_2)
+            self.place_crashing_platform(platform)
+            self.crashing_platforms.append(platform)
 
-    def place_platform(self, platform):
-        y = random.randint(self.last_y - sum(range(17)), self.last_y)
+    def place_normal_platform(self, platform):
+        y = random.randint(self.last_y - PLATFORMS_DIST,
+                            self.last_y - PLATFORMS_DIST//2 )
         x = random.randint(0, SCREEN_WIDTH - PLATFORM_WIDTH)
-        rect = pygame.Rect(x, y, PLATFORM_WIDTH, PLATFORM_HEIGHT)
-
-        while any(rect.colliderect(existing_platform.rect) for existing_platform in self.platforms):
-            y = random.randint(self.last_y - sum(range(16)), self.last_y)
-            x = random.randint(0, SCREEN_WIDTH - PLATFORM_WIDTH)
-            rect = pygame.Rect(x, y, PLATFORM_WIDTH, PLATFORM_HEIGHT)
-
         platform.place(x, y)
-        self.last_y = y
+        self.last_y = y + PLATFORM_HEIGHT + 10
+
+    def place_crashing_platform(self, platform, min_y=-SCREEN_HEIGHT,
+                                            max_y=SCREEN_HEIGHT - PLATFORM_HEIGHT):
+        clear = False
+        x = 0
+        y = 0
+        while not clear:
+            x = random.randint(0, SCREEN_WIDTH - PLATFORM_WIDTH)
+            y = random.randint(min_y, max_y)
+            platform_aura = pygame.Rect(x - 20, y - 20, PLATFORM_WIDTH + 40, PLATFORM_HEIGHT + 40)
+
+            clear = True
+            for item in self.normal_platforms:
+                if platform_aura.colliderect(item.rect):
+                    clear = False
+                    break
+            for item in self.crashing_platforms:
+                if platform_aura.colliderect(item.rect):
+                    clear = False
+                    break
+        platform.place(x, y)
+        platform.renew()
+
 
     def all_down(self, up_value):
-        for el in self.platforms:
+        for el in self.normal_platforms:
             el.rect.y += up_value
         self.last_y += up_value
+        for el in self.crashing_platforms:
+            el.rect.y += up_value
+
 
     def update(self):
-        for i in range(len(self.platforms)):
-            if self.platforms[i].rect.y > SCREEN_HEIGHT:
-                self.place_platform(self.platforms[i])
+        for platform in self.normal_platforms:
+            if platform.rect.y > SCREEN_HEIGHT:
+                self.place_normal_platform(platform)
+        for platform in self.crashing_platforms:
+            if platform.rect.y > SCREEN_HEIGHT:
+                self.place_crashing_platform(platform,
+                -SCREEN_HEIGHT + self.last_y, -SCREEN_HEIGHT)
+
+    def draw(self, screen):
+        for platform in self.normal_platforms:
+            platform.draw(screen)
+        for platform in self.crashing_platforms:
+            platform.draw(screen)
+
+
+class Monster:
+    def __init__(self, platforms):
+        self.image = pygame.image.load("monster.png").convert_alpha()
+        self.platforms = platforms
+        self.speed = 6
+        self.place_monster()
+
+    def place_monster(self):
+        clear = False
+        x = 0
+        y = 0
+
+        while not clear:
+            x = random.randint(0, SCREEN_WIDTH - PLATFORM_WIDTH)
+            y = random.randint(-SCREEN_HEIGHT, 0)
+            monster_width, monster_height = self.image.get_size()
+            platform_aura = pygame.Rect(x - monster_width // 2, y - monster_height // 2,
+                                        monster_width, monster_height)
+            clear = True
+            for item in self.platforms.normal_platforms:
+                if platform_aura.colliderect(item.rect):
+                    clear = False
+                    break
+            for item in self.platforms.crashing_platforms:
+                if platform_aura.colliderect(item.rect):
+                    clear = False
+                    break
+
+        self.rect = self.image.get_rect(topleft=(x, y))
+        self.x = self.rect.x
+        self.y = self.rect.y
+
+    def move(self):
+        self.rect.x += self.speed
+        if self.rect.right > SCREEN_WIDTH or self.rect.left < 0:
+            self.speed = -self.speed
+
+    def update(self):
+        if self.rect.y > SCREEN_HEIGHT:
+            self.place_monster()
+
+    def draw(self, screen):
+        screen.blit(self.image, self.rect)
 
 
 class StartScreen:
@@ -152,6 +233,9 @@ class StartScreen:
         return "start_screen"
 
     def update(self):
+        pass
+
+    def draw(self):
         self.screen.blit(self.background_image, (0, 0))
         self.screen.blit(self.start_button_image, self.start_button_rect)
         self.screen.blit(self.rating_button_image, self.rating_button_rect)
@@ -188,6 +272,9 @@ class LevelScreen:
         return "level_screen"
 
     def update(self):
+        pass
+
+    def draw(self):
         self.screen.blit(self.background_image, (0, 0))
 
         self.screen.blit(self.normal_button_image, self.normal_button_rect)
@@ -202,158 +289,19 @@ class GameScreen:
         self.down_value = 0
         self.screen = screen
         self.db_instance = db_instance
+
         self.background_image = pygame.image.load("background.png")
         self.player = Player(SCREEN_WIDTH // 2 - PLAYER_WIDTH // 2, SCREEN_HEIGHT - PLAYER_HEIGHT - 20)
         self.back_button_image = pygame.image.load("back_lit.png")
         self.back_button_rect = self.back_button_image.get_rect(topleft=(10, 30))
-
-        #self.platforms = [
-        #    Platform(random.randint(0, SCREEN_WIDTH - PLATFORM_WIDTH),
-        #             random.randint(100, SCREEN_HEIGHT - PLATFORM_HEIGHT))
-        #    if random.randint(0, 3) else CrashingPlatform(random.randint(0, SCREEN_WIDTH - PLATFORM_WIDTH),
-        #                                           random.randint(100, SCREEN_HEIGHT - PLATFORM_HEIGHT)) for _ in range(10)]
-        #self.platforms = [Platform(random.randint(0, SCREEN_WIDTH - PLATFORM_WIDTH),
-        #             random.randint(100, SCREEN_HEIGHT - PLATFORM_HEIGHT)) for _ in range(10)]
-
-        self.platforms = Platforms("greenplatform.png")
-        self.crashing_platorms = []
-        for _ in range(5):
-            platform = CrashingPlatform("brownplatform.png", "brownplatformbr.png")
-            self.place_platform(platform)
-            self.platforms().append(platform)
-
+        self.platforms = Platforms("greenplatform.png",
+                "brownplatform.png", "brownplatformbr.png")
 
         self.font = pygame.font.Font(None, 36)
-        self.score_text = self.font.render(f"Score: {self.player.score}", True, WHITE)
+        self.score_text = self.font.render(f"Score: {self.player.score}", True, (77, 156, 34))
         self.score_rect = self.score_text.get_rect(center=(SCREEN_WIDTH // 2, 30))
         self.in_game = False
-
-    def place_platform(self, platform, min_y=100, max_y=SCREEN_HEIGHT - PLATFORM_HEIGHT):
-        clear = False
-        x = 0
-        y = 0
-        while not clear:
-            x = random.randint(0, SCREEN_WIDTH - PLATFORM_WIDTH)
-            y = random.randint(min_y, max_y)
-            platform_aura = pygame.Rect(x - 20, y - 20, PLATFORM_WIDTH + 40, PLATFORM_HEIGHT + 40)
-
-            clear = True
-            for item in self.platforms():
-                if platform_aura.colliderect(item.rect):
-                    clear = False
-                    break
-        platform.place(x, y)
-
-    def add_platfrom(self):
-        h = JUMP_HEIGHT - 1
-        w = SCREEN_WIDTH // 2
-
-        place = None
-        any_platform = False
-
-        for x in range(0, SCREEN_WIDTH, w):
-            for j in range(0, SCREEN_HEIGHT, h):
-                place = pygame.Rect(x, j, w, h)
-                any_platform = any(place.colliderect(item.rect) for item in self.platforms)
-                if not any_platform:
-                    new_platform_x = random.randint(place.left, place.right - PLATFORM_WIDTH)
-                    new_platform_y = random.randint(place.top - PLATFORM_HEIGHT, place.top)
-                    new_platform = Platform()
-                    new_platform.place(new_platform_x, new_platform_y)
-                    self.platforms.append(new_platform)
-
-    def handle_events(self):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                return "quit"
-            elif event.type == pygame.MOUSEBUTTONDOWN:
-                if self.back_button_rect.collidepoint(event.pos):
-                    return "start_screen"
-
-        keys_pressed = pygame.key.get_pressed()
-        if keys_pressed[pygame.K_LEFT]:
-            self.player.move(-10, 0)
-        if keys_pressed[pygame.K_RIGHT]:
-            self.player.move(10, 0)
-
-        if self.player.rect.x < 0:
-            self.player.rect.x = SCREEN_WIDTH - PLAYER_WIDTH
-        elif self.player.rect.x > SCREEN_WIDTH - PLAYER_WIDTH:
-            self.player.rect.x = 0
-
-        if self.player.rect.y > SCREEN_HEIGHT - PLAYER_HEIGHT and self.in_game:
-            self.db_instance.insert_rating("Player1", self.player.score)
-            return "game_over", "normal"
-        self.player.jump()
-
-    def all_down(self, add):
-        self.platforms.all_down(add)
-        self.player.rect.y += add
-        self.player.max_height -= add
-
-
-    def update(self):
-        self.screen.blit(self.background_image, (0, 0))
-        if self.player.is_jumping:
-            self.player.rect.y -= self.player.jump_count
-            self.player.jump_count -= GRAVITY
-            self.player.jump_count -= GRAVITY // 2
-
-        if not self.in_game and self.player.rect.y >= SCREEN_HEIGHT - PLAYER_HEIGHT:
-            self.player.is_jumping = False
-
-        for platform in self.platforms():
-            if (self.player.rect.colliderect(platform.rect) and
-                    self.player.rect.top <= platform.rect.top and 0 > self.player.jump_count):
-                if isinstance(platform, CrashingPlatform):
-                    platform.crash()
-                    self.player.is_jumping = True
-                else:
-                    self.player.is_jumping = False
-                    self.player.rect.y = platform.rect.y - PLAYER_HEIGHT
-                    if SCREEN_HEIGHT - self.player.rect.y > self.player.max_height:
-                        self.player.score += SCREEN_HEIGHT - self.player.rect.y - self.player.max_height
-                        self.player.max_height = SCREEN_HEIGHT - self.player.rect.y
-                self.in_game = True
-
-        for platform in self.crashing_platorms:
-            if (self.player.rect.colliderect(platform.rect) and
-                    self.player.rect.top <= platform.rect.top and 0 > self.player.jump_count):
-                platform.crash()
-                self.player.is_jumping = True
-                platform.move()
-
-
-        self.score_text = self.font.render(f"Score: {self.player.score}", True, WHITE)
-
-        if self.player.rect.y <= 0:  # опускаем быстро
-            self.all_down(JUMP_HEIGHT)
-        elif self.player.rect.y <= SCREEN_HEIGHT // 2 \
-                and self.down_value == 0:  # опускаем  медленно
-            self.down_value = JUMP_HEIGHT
-        if self.down_value > 0:
-            add = min(JUMP_HEIGHT // 2, self.down_value)
-            self.all_down(add)
-            self.down_value -= add
-
-        for platform in self.platforms():
-            platform.draw(self.screen)
-        self.player.draw(self.screen)
-        self.screen.blit(self.back_button_image, self.back_button_rect)
-        self.screen.blit(self.score_text, self.score_rect)
-        pygame.display.flip()
-
-
-class GeyserGameScreen(GameScreen):
-    def __init__(self, screen, db_instance):
-        GameScreen.__init__(self, screen, db_instance)
-        self.background_image = pygame.image.load("background2.png")
-        self.platforms = Platforms("yellowplatform.png")
-        self.crashing_platorms = []
-        for _ in range(5):
-            platform = CrashingPlatform("blackplatform.png", "blackplatformbr.png")
-            self.place_platform(platform)
-            self.platforms().append(platform)
+        self.return_str = "normal"
 
     def handle_events(self):
         for event in pygame.event.get():
@@ -368,10 +316,147 @@ class GeyserGameScreen(GameScreen):
             self.player.move(-10, 0)
         if keys_pressed[pygame.K_RIGHT] and self.player.rect.x < SCREEN_WIDTH - PLAYER_WIDTH:
             self.player.move(10, 0)
+
         if self.player.rect.y > SCREEN_HEIGHT - PLAYER_HEIGHT and self.in_game:
             self.db_instance.insert_rating("Player1", self.player.score)
-            return "game_over", "geyser"
+            return "game_over", self.return_str
         self.player.jump()
+
+    def draw(self):
+        self.screen.blit(self.background_image, (0, 0))
+        self.platforms.draw(self.screen)
+        self.player.draw(self.screen)
+        self.screen.blit(self.back_button_image, self.back_button_rect)
+        self.screen.blit(self.score_text, self.score_rect)
+        pygame.display.flip()
+
+    def all_down(self, add):
+        self.platforms.all_down(add)
+        self.player.rect.y += add
+        self.player.max_height -= add
+
+    def update(self):
+        #self.player.jump()
+        if self.player.is_jumping:
+            self.player.rect.y -= self.player.jump_count
+            self.player.jump_count -= GRAVITY
+
+        if not self.in_game and self.player.rect.y >= SCREEN_HEIGHT - PLAYER_HEIGHT:
+            self.player.is_jumping = False
+
+        for platform in self.platforms.normal_platforms:
+            if (self.player.rect.colliderect(platform.rect) and\
+                    self.player.rect.top <= platform.rect.top and\
+                    0 > self.player.jump_count):
+                self.player.is_jumping = False
+                self.player.rect.y = platform.rect.y - PLAYER_HEIGHT
+                if SCREEN_HEIGHT - self.player.rect.y > self.player.max_height:
+                    self.player.score += SCREEN_HEIGHT - self.player.rect.y - self.player.max_height
+                    self.player.max_height = SCREEN_HEIGHT - self.player.rect.y
+                self.in_game = True
+
+        for platform in self.platforms.crashing_platforms:
+            if (self.player.rect.colliderect(platform.rect) and\
+                    self.player.rect.top <= platform.rect.top and\
+                    0 > self.player.jump_count):
+                platform.crash()
+                self.player.is_jumping = True
+                self.in_game = True
+            platform.move()
+
+        self.score_text = self.font.render(f"Score: {self.player.score}", True, (77, 156, 34))
+
+        if self.player.rect.y <= 0:  # опускаем быстро
+            self.all_down(JUMP_HEIGHT)
+        elif self.player.rect.y <= SCREEN_HEIGHT // 2 \
+                and self.down_value == 0:  # опускаем  медленно
+            self.down_value = JUMP_HEIGHT
+        if self.down_value > 0:
+            add = min(JUMP_HEIGHT // 2, self.down_value)
+            self.all_down(add)
+            self.down_value -= add
+
+        self.platforms.update()
+
+
+class GeyserGameScreen(GameScreen):
+    def __init__(self, screen, db_instance):
+        GameScreen.__init__(self, screen, db_instance)
+        self.background_image = pygame.image.load("background2.png")
+        self.platforms = Platforms("yellowplatform.png",
+            "blackplatform.png", "blackplatformbr.png")
+        self.return_str = "geyser"
+        self.monster = None
+
+    def draw(self):
+        self.screen.blit(self.background_image, (0, 0))
+        self.platforms.draw(self.screen)
+        self.player.draw(self.screen)
+        if self.monster:
+            self.monster.draw(self.screen)
+        self.screen.blit(self.back_button_image, self.back_button_rect)
+        self.screen.blit(self.score_text, self.score_rect)
+        pygame.display.flip()
+
+    def all_down(self, add):
+        GameScreen.all_down(self, add)
+        if self.monster:
+            self.monster.rect.y += add
+
+    def update(self):
+        #self.player.jump()
+        if self.player.is_jumping:
+            self.player.rect.y -= self.player.jump_count
+            self.player.jump_count -= GRAVITY
+
+        if not self.in_game and self.player.rect.y >= SCREEN_HEIGHT - PLAYER_HEIGHT:
+            self.player.is_jumping = False
+
+        for platform in self.platforms.normal_platforms:
+            if (self.player.rect.colliderect(platform.rect) and\
+                    self.player.rect.top <= platform.rect.top and\
+                    0 > self.player.jump_count):
+                if not self.player.is_falling:
+                    self.player.is_jumping = False
+                    self.player.rect.y = platform.rect.y - PLAYER_HEIGHT
+                    if SCREEN_HEIGHT - self.player.rect.y > self.player.max_height:
+                        self.player.score += SCREEN_HEIGHT - self.player.rect.y - self.player.max_height
+                        self.player.max_height = SCREEN_HEIGHT - self.player.rect.y
+                    self.in_game = True
+
+        for platform in self.platforms.crashing_platforms:
+            if (self.player.rect.colliderect(platform.rect) and\
+                    self.player.rect.top <= platform.rect.top and\
+                    0 > self.player.jump_count):
+                if not self.player.is_falling:
+                    platform.crash()
+                    self.player.is_jumping = True
+                    self.in_game = True
+            platform.move()
+
+        if self.player.score > 1500 and not self.monster:
+            self.monster = Monster(self.platforms)
+
+        if self.monster:
+            self.monster.move()
+            if self.player.rect.colliderect(self.monster.rect):
+                self.player.is_falling = True
+
+        self.score_text = self.font.render(f"Score: {self.player.score}", True, WHITE)
+
+        if self.player.rect.y <= 0:  # опускаем быстро
+            self.all_down(JUMP_HEIGHT)
+        elif self.player.rect.y <= SCREEN_HEIGHT // 2 \
+                and self.down_value == 0:  # опускаем  медленно
+            self.down_value = JUMP_HEIGHT
+        if self.down_value > 0:
+            add = min(JUMP_HEIGHT // 2, self.down_value)
+            self.all_down(add)
+            self.down_value -= add
+
+        self.platforms.update()
+        if self.monster:
+            self.monster.update()
 
 
 class FinalScreen:
@@ -395,6 +480,9 @@ class FinalScreen:
                 return self.last_screen
 
     def update(self):
+        pass
+
+    def draw(self):
         self.screen.blit(self.background_image, (0, 0))
         self.screen.blit(self.text, (SCREEN_WIDTH // 2 - 120, SCREEN_HEIGHT // 2 - 120))
         self.screen.blit(self.text2, (SCREEN_WIDTH // 2 - 155, SCREEN_HEIGHT // 2 - 70))
@@ -434,6 +522,9 @@ class RatingScreen:
         return "rating_screen"
 
     def update(self):
+        pass
+
+    def draw(self):
         self.screen.fill(BLACK)
         text_y = 150
 
@@ -506,7 +597,6 @@ def main():
     clock = pygame.time.Clock()
 
     while True:
-        current_screen.update()
         next_screen = current_screen.handle_events()
         if next_screen:
             if "game_over" in next_screen:
@@ -532,7 +622,10 @@ def main():
             pygame.quit()
             sys.exit()
             return
-        clock.tick(40)
+
+        current_screen.update()
+        current_screen.draw()
+        clock.tick(30)
 
 
 if __name__ == "__main__":
