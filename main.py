@@ -148,7 +148,6 @@ class Platforms:
                 if platform_aura.colliderect(item.rect):
                     clear = False
                     break
-
         platform.place(x, y)
         platform.renew()
 
@@ -165,7 +164,6 @@ class Platforms:
         for platform in self.normal_platforms:
             if platform.rect.y > SCREEN_HEIGHT:
                 self.place_normal_platform(platform)
-
         for platform in self.crashing_platforms:
             if platform.rect.y > SCREEN_HEIGHT:
                 self.place_crashing_platform(platform, -SCREEN_HEIGHT + self.last_y, -SCREEN_HEIGHT)
@@ -192,7 +190,6 @@ class Monster:
         x = 0
         y = 0
 
-        # Проверка на пересечение
         while not clear:
             x = random.randint(0, SCREEN_WIDTH - PLATFORM_WIDTH)
             y = random.randint(-SCREEN_HEIGHT, 0)
@@ -233,13 +230,15 @@ class Monster:
         screen.blit(self.image, self.rect)
 
 
-# Класс стартового экрана
+# Начальный экран
 class StartScreen:
     def __init__(self, screen):
         self.screen = screen
-        self.background_image = pygame.image.load("start_background.png")
-        self.start_button_image = pygame.image.load("start_button.png")
-        self.start_button_rect = self.start_button_image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 + 50))
+        self.background_image = pygame.image.load("background.png")
+        self.start_button_image = pygame.image.load("start.png")
+        self.start_button_rect = self.start_button_image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 130))
+        self.rating_button_image = pygame.image.load("rat_main.png")
+        self.rating_button_rect = self.rating_button_image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
 
     # Обработка событий на стартовом экране
     def handle_events(self):
@@ -248,7 +247,10 @@ class StartScreen:
                 return 'quit'
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 if self.start_button_rect.collidepoint(event.pos):
-                    return "normal"
+                    return "level_screen"
+                elif self.rating_button_rect.collidepoint(event.pos):
+                    return "rating_screen"
+        return "start_screen"
 
     def update(self):
         pass
@@ -257,10 +259,11 @@ class StartScreen:
     def draw(self):
         self.screen.blit(self.background_image, (0, 0))
         self.screen.blit(self.start_button_image, self.start_button_rect)
+        self.screen.blit(self.rating_button_image, self.rating_button_rect)
         pygame.display.flip()
 
 
-# Класс экрана выбора уровня
+# Экран выбора уровня
 class LevelScreen:
     def __init__(self, screen):
         pygame.init()
@@ -304,7 +307,7 @@ class LevelScreen:
         pygame.display.flip()
 
 
-# Класс основного игрового экрана (уровень 1)
+# Игровой экран (1 уровень)
 class GameScreen:
     def __init__(self, screen, db_instance):
         self.up_value = 0
@@ -365,9 +368,8 @@ class GameScreen:
         self.player.rect.y += add
         self.player.max_height -= add
 
-    # Обновление состояния игрового экрана
+    # Обновление игрового экрана
     def update(self):
-        #self.player.jump()
         if self.player.is_jumping:
             self.player.rect.y -= self.player.jump_count
             self.player.jump_count -= GRAVITY
@@ -410,7 +412,7 @@ class GameScreen:
         self.platforms.update()
 
 
-# Класс экрана игры (уровень 2)
+# Игровой экран (2 уровень)
 class GeyserGameScreen(GameScreen):
     def __init__(self, screen, db_instance):
         GameScreen.__init__(self, screen, db_instance)
@@ -422,7 +424,7 @@ class GeyserGameScreen(GameScreen):
         self.return_str = "geyser"
         self.monster = None
 
-    # Отрисовка экрана игры с гейзером
+    # Отрисовка игрового экрана
     def draw(self):
         self.screen.blit(self.background_image, (0, 0))
         self.platforms.draw(self.screen)
@@ -439,7 +441,7 @@ class GeyserGameScreen(GameScreen):
         if self.monster:
             self.monster.rect.y += add
 
-    # Обработка событий на экране
+    # Обработка событий
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -463,7 +465,7 @@ class GeyserGameScreen(GameScreen):
             return "game_over", self.return_str
         self.player.jump()
 
-    # Обновление состояния экрана
+    # Обновление игрового экрана
     def update(self):
         if self.player.is_jumping:
             self.player.rect.y -= self.player.jump_count
@@ -520,7 +522,7 @@ class GeyserGameScreen(GameScreen):
             self.monster.update()
 
 
-# Класс экрана окончания игры
+# Финальное окно
 class FinalScreen:
     def __init__(self, screen, last_screen="normal"):
         self.screen = screen
@@ -532,7 +534,7 @@ class FinalScreen:
         self.text = self.font.render("Game Over!", True, (77, 156, 34))
         self.text2 = self.font.render("Click to restart.", True, (77, 156, 34))
 
-    # Обработка событий на экране окончания игры
+    # Обработка событий
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -545,7 +547,7 @@ class FinalScreen:
     def update(self):
         pass
 
-    # Отрисовка экрана окончания игры
+    # Отрисовка финального окна
     def draw(self):
         self.screen.blit(self.background_image, (0, 0))
         self.screen.blit(self.text, (SCREEN_WIDTH // 2 - 120, SCREEN_HEIGHT // 2 - 120))
@@ -554,7 +556,7 @@ class FinalScreen:
         pygame.display.flip()
 
 
-# Класс экрана рейтинга
+# Окно рейтинга
 class RatingScreen:
     def __init__(self, screen, db_instance):
         self.screen = screen
@@ -568,7 +570,7 @@ class RatingScreen:
         self.back_button_image = pygame.image.load("back.png")
         self.back_button_rect = self.back_button_image.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50))
 
-    # Получение данных рейтинга из базы данных
+    # Загрузка данных из БД
     def fetch_ranking_data(self):
         try:
             table_name = "рейтинг"
@@ -578,7 +580,7 @@ class RatingScreen:
         except sqlite3.Error as e:
             print("Error fetching ranking data:", e)
 
-    # Обработка событий на экране рейтинга
+    # Обработка событий
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -591,7 +593,7 @@ class RatingScreen:
     def update(self):
         pass
 
-    # Отрисовка экрана рейтинга
+    # Отрисовка экрана
     def draw(self):
         self.screen.fill(BLACK)
         text_y = 150
@@ -617,7 +619,7 @@ class RatingScreen:
         pygame.display.flip()
 
 
-# Класс для работы с базой данных
+# Класс для работы с БД
 class DBSample:
     def __init__(self):
         try:
